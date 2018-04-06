@@ -17,25 +17,27 @@ module Sequel
               raise Error, "association #{association_name} not found on model #{model}"
             end
 
-          other_class = reflection.associated_class
+          dataset =
+            cached_dataset(:"_association_filter_#{association_name}") do
+              ds = reflection.associated_dataset
 
-          dataset = reflection.associated_dataset
+              case t = reflection[:type]
+              when :one_to_many
+                local_keys  = reflection.qualified_primary_key
+                remote_keys = reflection.predicate_key
+              when :many_to_one
+                local_keys  = reflection[:qualified_key]
+                remote_keys = reflection.qualified_primary_key
+              else
+                raise Error, "Unsupported reflection type: #{t}"
+              end
+
+              ds.where(local_keys => remote_keys).select(1)
+            end
+
           dataset = yield dataset if block_given?
 
-          case t = reflection[:type]
-          when :one_to_many
-            local_keys  = reflection.qualified_primary_key
-            remote_keys = reflection.predicate_key
-          when :many_to_one
-            local_keys  = reflection[:qualified_key]
-            remote_keys = reflection.qualified_primary_key
-          else
-            raise Error, "Unsupported reflection type: #{t}"
-          end
-
-          dataset = dataset.where(local_keys => remote_keys)
-
-          where(dataset.select(1).exists)
+          where(dataset.exists)
         end
       end
     end
