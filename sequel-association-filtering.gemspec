@@ -1,0 +1,26 @@
+# coding: utf-8
+lib = File.expand_path('../lib', __FILE__)
+$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+require 'sequel/plugins/association_filtering/version'
+
+Gem::Specification.new do |spec|
+  spec.name          = 'sequel-association-filtering'
+  spec.version       = Sequel::Plugins::AssociationFiltering::VERSION
+  spec.authors       = ["Chris Hanks"]
+  spec.email         = ['christopher.m.hanks@gmail.com']
+  spec.summary       = %q{Easy filtering through Sequel associations.}
+  spec.description   = %q{Easily filter records by the presence/absence of associated records.}
+  spec.homepage      = 'https://github.com/chanks/sequel-association-filtering'
+  spec.license       = 'MIT'
+
+  spec.files         = `git ls-files -z`.split("\x0")
+  spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
+  spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
+  spec.require_paths = ['lib']
+
+  spec.add_development_dependency 'bundler', '~> 1.6'
+  spec.add_development_dependency 'rake'
+  spec.add_development_dependency 'pg'
+
+  spec.add_dependency 'sequel', '~> 5.0'
+end
