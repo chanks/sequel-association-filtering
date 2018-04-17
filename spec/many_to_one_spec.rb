@@ -1,6 +1,40 @@
 require 'spec_helper'
 
-class AssociationFilteringSpec < AssociationFilteringSpecs
+class ManyToOneSpec < AssociationFilteringSpecs
+  before do
+    drop_tables
+
+    DB.create_table :artists do
+      primary_key :id
+    end
+
+    DB.create_table :albums do
+      primary_key :id
+      foreign_key :artist_id, :artists
+    end
+
+    DB.run <<-SQL
+      INSERT INTO artists SELECT i FROM generate_series(1, 10) i;
+      INSERT INTO albums (artist_id) SELECT (i % 10) + 1 FROM generate_series(1, 100) i;
+    SQL
+
+    class Artist < Sequel::Model
+      one_to_many :albums, class: 'ManyToOneSpec::Album'
+    end
+
+    class Album < Sequel::Model
+      many_to_one :artist, class: 'ManyToOneSpec::Artist'
+    end
+  end
+
+  after do
+    drop_tables
+  end
+
+  def drop_tables
+    DB.drop_table? :albums, :artists
+  end
+
   describe "association_filter through a many_to_one association" do
     it "should support a simple filter" do
       ds = Album.association_filter(:artist){|a| a.where{mod(id, 5) =~ 0}}

@@ -49,7 +49,15 @@ module Sequel
               raise Error, "Unsupported reflection type: #{t}"
             end
 
-            ds.where(remote_keys => local_keys).select(1)
+            local_keys  = Array(local_keys)
+            remote_keys = Array(remote_keys)
+
+            ds.where(
+              remote_keys.
+              zip(local_keys).
+              map{|r,l| {r => l}}.
+              inject{|a,b| Sequel.&(a, b)}
+            ).select(1)
           end
         end
 

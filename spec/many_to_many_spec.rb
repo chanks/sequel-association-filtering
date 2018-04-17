@@ -1,6 +1,50 @@
 require 'spec_helper'
 
-class AssociationFilteringSpec < AssociationFilteringSpecs
+class ManyToManySpec < AssociationFilteringSpecs
+  before do
+    drop_tables
+
+    DB.create_table :albums do
+      primary_key :id
+    end
+
+    DB.create_table :genres do
+      primary_key :id
+    end
+
+    DB.create_table :album_genres do
+      primary_key :id
+      foreign_key :album_id, :albums
+      foreign_key :genre_id, :genres
+
+      unique [:album_id, :genre_id]
+    end
+
+    DB.run <<-SQL
+      INSERT INTO albums SELECT i FROM generate_series(1, 100) i;
+      INSERT INTO genres SELECT i FROM generate_series(1, 10) i;
+
+      INSERT INTO album_genres (album_id, genre_id)
+        SELECT DISTINCT ceil(random() * 100), ceil(random() * 10) FROM generate_series(1, 300);
+    SQL
+
+    class Album < Sequel::Model
+      many_to_many :genres, class: 'ManyToManySpec::Genre', join_table: :album_genres
+    end
+
+    class Genre < Sequel::Model
+      many_to_many :albums, class: 'ManyToManySpec::Album', join_table: :album_genres
+    end
+  end
+
+  after do
+    drop_tables
+  end
+
+  def drop_tables
+    DB.drop_table? :album_genres, :genres, :albums
+  end
+
   describe "association_filter through a many_to_many_association" do
     it "should support an empty filter that checks for existence" do
       expected_count = DB[:album_genres].distinct(:album_id).count
