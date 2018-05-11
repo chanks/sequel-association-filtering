@@ -25,14 +25,17 @@ module Sequel
 
           if block_given?
             cond = yield(_association_filter_dataset(reflection)).exists
-            cond = SQL::BooleanExpression.invert(cond) if invert
-            where(cond)
+            invert ? exclude(cond) : where(cond)
           else
-            key = _association_filter_cache_key(reflection, invert: invert, suffix: :bare)
-            cached_dataset(key) do
+            cache_key =
+              _association_filter_cache_key(
+                reflection: reflection,
+                extra: :"bare_#{invert}",
+              )
+
+            cached_dataset(cache_key) do
               cond = _association_filter_dataset(reflection).exists
-              cond = SQL::BooleanExpression.invert(cond) if invert
-              where(cond)
+              invert ? exclude(cond) : where(cond)
             end
           end
         end
@@ -44,7 +47,7 @@ module Sequel
         private
 
         def _association_filter_dataset(reflection)
-          cache_key = _association_filter_cache_key(reflection)
+          cache_key = _association_filter_cache_key(reflection: reflection)
 
           ds = reflection.associated_dataset
 
@@ -75,8 +78,8 @@ module Sequel
           end
         end
 
-        def _association_filter_cache_key(reflection, invert: nil, suffix: nil)
-          :"_association_filter_#{reflection[:model]}_#{reflection[:name]}_#{suffix}#{'_invert' if invert}"
+        def _association_filter_cache_key(reflection:, extra: nil)
+          :"_association_filter_#{reflection[:model]}_#{reflection[:name]}_#{extra}"
         end
       end
     end
