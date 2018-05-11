@@ -7,24 +7,38 @@ module Sequel
       class Error < StandardError; end
 
       module ClassMethods
-        Plugins.def_dataset_methods(self, :association_filter)
+        Plugins.def_dataset_methods(
+          self,
+          [
+            :association_filter,
+            :association_exclude,
+          ]
+        )
       end
 
       module DatasetMethods
-        def association_filter(association_name)
+        def association_filter(association_name, invert: false)
           reflection =
             model.association_reflections.fetch(association_name) do
               raise Error, "association #{association_name} not found on model #{model}"
             end
 
           if block_given?
-            ds = yield(_association_filter_dataset(reflection))
-            where(ds.exists)
+            cond = yield(_association_filter_dataset(reflection)).exists
+            cond = SQL::BooleanExpression.invert(cond) if invert
+            where(cond)
           else
-            cached_dataset(_association_filter_cache_key(reflection, suffix: :bare)) do
-              where(_association_filter_dataset(reflection).exists)
+            key = _association_filter_cache_key(reflection, invert: invert, suffix: :bare)
+            cached_dataset(key) do
+              cond = _association_filter_dataset(reflection).exists
+              cond = SQL::BooleanExpression.invert(cond) if invert
+              where(cond)
             end
           end
+        end
+
+        def association_exclude(association_name, &block)
+          association_filter(association_name, invert: true, &block)
         end
 
         private
@@ -61,8 +75,8 @@ module Sequel
           end
         end
 
-        def _association_filter_cache_key(reflection, suffix: nil)
-          :"_association_filter_#{reflection[:model]}_#{reflection[:name]}_#{suffix}"
+        def _association_filter_cache_key(reflection, invert: nil, suffix: nil)
+          :"_association_filter_#{reflection[:model]}_#{reflection[:name]}_#{suffix}#{'_invert' if invert}"
         end
       end
     end

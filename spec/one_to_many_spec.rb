@@ -129,5 +129,26 @@ class OneToManySpec < AssociationFilteringSpecs
         assert_equal 99, ds.count
       end
     end
+
+    describe "association_exclude through a one_to_many association" do
+      it "should support a simple filter" do
+        ds = Artist.association_exclude(:albums){|t| t.where(serial_column: 40)}
+
+        assert_equal 99, ds.count
+        assert_equal %(SELECT * FROM "artists" WHERE NOT (EXISTS (SELECT 1 FROM "albums" WHERE (("albums"."id_1" = "artists"."id_1") AND ("albums"."id_2" = "artists"."id_2") AND ("serial_column" = 40))))), ds.sql
+
+        artists = ds.all
+        refute_includes artists.flat_map(&:albums).map(&:serial_column), 40
+      end
+
+      it "should support an empty filter that checks for existence" do
+        ds = Artist.association_exclude(:albums)
+        assert_equal 0, ds.count
+        assert_equal %(SELECT * FROM "artists" WHERE NOT (EXISTS (SELECT 1 FROM "albums" WHERE (("albums"."id_1" = "artists"."id_1") AND ("albums"."id_2" = "artists"."id_2"))))), ds.sql
+
+        Album.where(id_1: 5, id_2: 6).delete
+        assert_equal 1, ds.count
+      end
+    end
   end
 end
