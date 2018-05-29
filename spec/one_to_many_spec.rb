@@ -58,6 +58,25 @@ class OneToManySpec < AssociationFilteringSpecs
         Album.where(artist_id: 5).delete
         assert_equal 9, ds.count
       end
+
+      it "should support at_least/exactly/at_most args" do
+        Album.create(artist_id: 1)
+
+        ds = Artist.association_filter(:albums, exactly: 11)
+        assert_equal 1, ds.count
+        assert_equal %(SELECT * FROM "artists" WHERE (EXISTS (SELECT 1 FROM "albums" WHERE ("albums"."artist_id" = "artists"."id") GROUP BY "albums"."artist_id" HAVING (count(*) = 11)))), ds.sql
+        assert_equal [1], ds.select_map(:id)
+
+        ds = Artist.association_filter(:albums, at_least: 2){|albums| albums.where{id > 90}}
+        assert_equal 1, ds.count
+        assert_equal %(SELECT * FROM "artists" WHERE (EXISTS (SELECT 1 FROM "albums" WHERE (("albums"."artist_id" = "artists"."id") AND ("id" > 90)) GROUP BY "albums"."artist_id" HAVING (count(*) >= 2)))), ds.sql
+        assert_equal [1], ds.select_map(:id)
+
+        ds = Artist.association_filter(:albums, at_most: 1){|albums| albums.where{id > 90}}
+        assert_equal 9, ds.count
+        assert_equal %(SELECT * FROM "artists" WHERE (EXISTS (SELECT 1 FROM "albums" WHERE (("albums"."artist_id" = "artists"."id") AND ("id" > 90)) GROUP BY "albums"."artist_id" HAVING (count(*) <= 1)))), ds.sql
+        assert_equal (2..10).to_a, ds.select_order_map(:id)
+      end
     end
   end
 
@@ -129,6 +148,25 @@ class OneToManySpec < AssociationFilteringSpecs
 
         Album.where(id_1: 5, id_2: 6).delete
         assert_equal 99, ds.count
+      end
+
+      it "should support at_least/exactly/at_most args" do
+        Album.dataset.insert(id_1: 1, id_2: 1, id_3: 11)
+
+        ds = Artist.association_filter(:albums, exactly: 11)
+        assert_equal 1, ds.count
+        assert_equal %(SELECT * FROM "artists" WHERE (EXISTS (SELECT 1 FROM "albums" WHERE (("albums"."id_1" = "artists"."id_1") AND ("albums"."id_2" = "artists"."id_2")) GROUP BY "albums"."id_1", "albums"."id_2" HAVING (count(*) = 11)))), ds.sql
+        assert_equal [[1, 1]], ds.select_map([:id_1, :id_2])
+
+        ds = Artist.association_filter(:albums, at_least: 2){|albums| albums.where{serial_column > 900}}
+        assert_equal 1, ds.count
+        assert_equal %(SELECT * FROM "artists" WHERE (EXISTS (SELECT 1 FROM "albums" WHERE (("albums"."id_1" = "artists"."id_1") AND ("albums"."id_2" = "artists"."id_2") AND ("serial_column" > 900)) GROUP BY "albums"."id_1", "albums"."id_2" HAVING (count(*) >= 2)))), ds.sql
+        assert_equal [[1, 1]], ds.select_map([:id_1, :id_2])
+
+        ds = Artist.association_filter(:albums, at_most: 1){|albums| albums.where{serial_column > 900}}
+        assert_equal 99, ds.count
+        assert_equal %(SELECT * FROM "artists" WHERE (EXISTS (SELECT 1 FROM "albums" WHERE (("albums"."id_1" = "artists"."id_1") AND ("albums"."id_2" = "artists"."id_2") AND ("serial_column" > 900)) GROUP BY "albums"."id_1", "albums"."id_2" HAVING (count(*) <= 1)))), ds.sql
+        assert_equal (2..100).to_a, ds.select_order_map(:serial_column)
       end
     end
 

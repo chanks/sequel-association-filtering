@@ -19,27 +19,47 @@ module Sequel
       end
 
       module DatasetMethods
-        def association_filter(association_name, invert: false)
+        COUNT_STAR = Sequel.virtual_row{count.function.*}
+
+        def association_filter(
+          association_name,
+          invert: false,
+          at_least: nil,
+          at_most: nil,
+          exactly: nil
+        )
+          case [at_least, at_most, exactly].compact.length
+          when 0
+            filtering_by_count = false
+          when 1
+            filtering_by_count = true
+          else
+            raise Error, "cannot pass more than one of :at_least, :at_most, and :exactly"
+          end
+
           reflection =
             model.association_reflections.fetch(association_name) do
               raise Error, "association #{association_name} not found on model #{model}"
             end
 
-          if block_given?
-            cond = yield(_association_filter_dataset(reflection)).exists
-            invert ? exclude(cond) : where(cond)
-          else
-            cache_key =
-              _association_filter_cache_key(
-                reflection: reflection,
-                extra: :"bare_#{invert}",
-              )
+          ds = _association_filter_dataset(reflection, group_by_remote: filtering_by_count)
+          ds = yield(ds) if block_given?
 
-            cached_dataset(cache_key) do
-              cond = _association_filter_dataset(reflection).exists
-              invert ? exclude(cond) : where(cond)
-            end
+          if filtering_by_count
+            ds =
+              ds.having(
+                case
+                when at_least then COUNT_STAR >= at_least
+                when at_most  then COUNT_STAR <= at_most
+                when exactly  then COUNT_STAR =~ exactly
+                else raise Error, ""
+                end
+              )
           end
+
+          cond = ds.exists
+          cond = Sequel.~(cond) if invert
+          where(cond)
         end
 
         def association_exclude(association_name, &block)
@@ -48,8 +68,12 @@ module Sequel
 
         private
 
-        def _association_filter_dataset(reflection)
-          cache_key = _association_filter_cache_key(reflection: reflection)
+        def _association_filter_dataset(reflection, group_by_remote:)
+          cache_key =
+            _association_filter_cache_key(
+              reflection: reflection,
+              extra: (:group_by_remote if group_by_remote)
+            )
 
           ds = reflection.associated_dataset
 
@@ -71,12 +95,19 @@ module Sequel
             local_keys  = Array(local_keys)
             remote_keys = Array(remote_keys)
 
-            ds.where(
-              remote_keys.
-              zip(local_keys).
-              map{|r,l| {r => l}}.
-              inject{|a,b| Sequel.&(a, b)}
-            ).select(1)
+            result =
+              ds.where(
+                remote_keys.
+                zip(local_keys).
+                map{|r,l| {r => l}}.
+                inject{|a,b| Sequel.&(a, b)}
+              ).select(1)
+
+            if group_by_remote
+              result.group_by(*remote_keys)
+            else
+              result
+            end
           end
         end
 
