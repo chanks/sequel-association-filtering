@@ -50,7 +50,6 @@ module Sequel
           cache_key =
             _association_filter_cache_key(
               reflection: reflection,
-              type: :main,
               extra: :"#{invert}_#{having_arg}_#{having_value}",
             )
 
@@ -83,8 +82,7 @@ module Sequel
           cache_key =
             _association_filter_cache_key(
               reflection: reflection,
-              type: :association,
-              extra: (:group_by_remote if group_by_remote)
+              extra: :"association_#{group_by_remote}"
             )
 
           ds = reflection.associated_dataset
@@ -115,16 +113,13 @@ module Sequel
                 inject{|a,b| Sequel.&(a, b)}
               ).select(1)
 
-            if group_by_remote
-              result.group_by(*remote_keys)
-            else
-              result
-            end
+            result = result.group_by(*remote_keys) if group_by_remote
+            result
           end
         end
 
-        def _association_filter_cache_key(reflection:, type:, extra: nil)
-          :"_association_filter_#{reflection[:model]}_#{reflection[:name]}_#{type}_#{extra}"
+        def _association_filter_cache_key(reflection:, extra: nil)
+          :"_association_filter_#{reflection[:model]}_#{reflection[:name]}_#{extra}"
         end
       end
     end
