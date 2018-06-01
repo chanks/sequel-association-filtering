@@ -54,18 +54,16 @@ module Sequel
             )
 
           ds.send :cached_dataset, cache_key do
-            if having_arg
-              ds =
-                ds.having(
-                  case having_arg
-                  when :at_least then COUNT_STAR >= having_value
-                  when :at_most  then COUNT_STAR <= having_value
-                  when :exactly  then COUNT_STAR =~ having_value
-                  else raise Error, "Unexpected argument: #{having_arg.inspect}"
-                  end
-                )
-            end
+            having_condition =
+              case having_arg
+              when :at_least then COUNT_STAR >= having_value
+              when :at_most  then COUNT_STAR <= having_value
+              when :exactly  then COUNT_STAR =~ having_value
+              when nil       then nil
+              else raise Error, "Unexpected argument: #{having_arg.inspect}"
+              end
 
+            ds = ds.having(having_condition) if having_condition
             cond = ds.exists
             cond = Sequel.~(cond) if invert
             where(cond)
