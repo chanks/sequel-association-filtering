@@ -80,30 +80,31 @@ class BasicSpec < AssociationFilteringSpecs
         Set.new
       end
 
-      def assert_cached(&block)
-        ds1, ds2 = Array.new(2, &block)
-        assert_equal ds1.object_id, ds2.object_id
-        assert seen_object_ids.add?(ds1.object_id)
+      def assert_cached(*args, &block)
+        ds1, ds2 = Array.new(2, Artist.association_filter(:albums, *args, &block))
+        assert_equal ds1.object_id, ds2.object_id, ds1.sql
+        assert seen_object_ids.add?(ds1.object_id), ds1.sql
+
+        ds1, ds2 = Array.new(2, Artist.association_exclude(:albums, *args, &block))
+        assert_equal ds1.object_id, ds2.object_id, ds1.sql
+        assert seen_object_ids.add?(ds1.object_id), ds1.sql
       end
 
       def refute_cached(&block)
         ds1, ds2 = Array.new(2, &block)
-        refute_equal ds1.object_id, ds2.object_id
+        refute_equal ds1.object_id, ds2.object_id, ds1.sql
       end
 
       it "should be able to return a cached dataset" do
-        skip
-
         assert_cached { Artist.association_filter(:albums) }
         assert_cached { Artist.association_filter(:albums, &:even_id) }
 
         assert_cached { Artist.association_filter(:albums, at_least: 2) }
+        assert_cached { Artist.association_filter(:albums, at_least: 3) }
         assert_cached { Artist.association_filter(:albums, exactly:  2) }
         assert_cached { Artist.association_filter(:albums, at_most:  2) }
 
         assert_cached { Artist.association_filter(:albums, at_least: 2, &:even_id) }
-        assert_cached { Artist.association_filter(:albums, exactly:  2, &:even_id) }
-        assert_cached { Artist.association_filter(:albums, at_most:  2, &:even_id) }
       end
 
       it "should not cache potentially dynamic datasets" do

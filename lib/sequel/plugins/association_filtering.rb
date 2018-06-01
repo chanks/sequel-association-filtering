@@ -47,21 +47,30 @@ module Sequel
           ds = _association_filter_dataset(reflection, group_by_remote: !!having_arg)
           ds = yield(ds) if block_given?
 
-          if having_arg
-            ds =
-              ds.having(
-                case having_arg
-                when :at_least then COUNT_STAR >= having_value
-                when :at_most  then COUNT_STAR <= having_value
-                when :exactly  then COUNT_STAR =~ having_value
-                else raise Error, "Unexpected argument: #{having_arg.inspect}"
-                end
-              )
-          end
+          cache_key =
+            _association_filter_cache_key(
+              reflection: reflection,
+              type: :main,
+              extra: :"#{invert}_#{having_arg}_#{having_value}",
+            )
 
-          cond = ds.exists
-          cond = Sequel.~(cond) if invert
-          where(cond)
+          ds.send :cached_dataset, cache_key do
+            if having_arg
+              ds =
+                ds.having(
+                  case having_arg
+                  when :at_least then COUNT_STAR >= having_value
+                  when :at_most  then COUNT_STAR <= having_value
+                  when :exactly  then COUNT_STAR =~ having_value
+                  else raise Error, "Unexpected argument: #{having_arg.inspect}"
+                  end
+                )
+            end
+
+            cond = ds.exists
+            cond = Sequel.~(cond) if invert
+            where(cond)
+          end
         end
 
         def association_exclude(association_name, &block)
@@ -74,6 +83,7 @@ module Sequel
           cache_key =
             _association_filter_cache_key(
               reflection: reflection,
+              type: :association,
               extra: (:group_by_remote if group_by_remote)
             )
 
@@ -113,8 +123,8 @@ module Sequel
           end
         end
 
-        def _association_filter_cache_key(reflection:, extra: nil)
-          :"_association_filter_#{reflection[:model]}_#{reflection[:name]}_#{extra}"
+        def _association_filter_cache_key(reflection:, type:, extra: nil)
+          :"_association_filter_#{reflection[:model]}_#{reflection[:name]}_#{type}_#{extra}"
         end
       end
     end
