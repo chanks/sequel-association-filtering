@@ -26,6 +26,10 @@ class BasicSpec < AssociationFilteringSpecs
 
     class Album < Sequel::Model
       many_to_one :artist, class: 'BasicSpec::Artist'
+
+      dataset_module do
+        subset :even_id, Sequel.lit('id % ? = 0', 2)
+      end
     end
   end
 
@@ -50,14 +54,61 @@ class BasicSpec < AssociationFilteringSpecs
     end
 
     it "with more than one of at_least, at_most, or exactly should throw an error" do
+      a, b = [:at_most, :exactly, :at_least].sample(2)
+
       error =
         assert_raises(Sequel::Plugins::AssociationFiltering::Error) do
-          Artist.association_filter(:widgets, at_most: 4, exactly: 5)
+          Artist.association_filter(:widgets, a => 4, b => 5)
         end
 
       assert_equal "cannot pass more than one of :at_least, :at_most, and :exactly", error.message
     end
 
-    it "should be able to return a cached dataset"
+    it "with an at_least/at_most/exactly that is not an integer should raise an error" do
+      a = [:at_most, :exactly, :at_least].sample
+
+      error =
+        assert_raises(Sequel::Plugins::AssociationFiltering::Error) do
+          Artist.association_filter(:widgets, a => Object.new)
+        end
+
+      assert_equal ":at_least, :at_most, and :exactly must be integers if present", error.message
+    end
+
+    describe "cached datasets" do
+      let :seen_object_ids do
+        Set.new
+      end
+
+      def assert_cached(&block)
+        ds1, ds2 = Array.new(2, &block)
+        assert_equal ds1.object_id, ds2.object_id
+        assert seen_object_ids.add?(ds1.object_id)
+      end
+
+      def refute_cached(&block)
+        ds1, ds2 = Array.new(2, &block)
+        refute_equal ds1.object_id, ds2.object_id
+      end
+
+      it "should be able to return a cached dataset" do
+        skip
+
+        assert_cached { Artist.association_filter(:albums) }
+        assert_cached { Artist.association_filter(:albums, &:even_id) }
+
+        assert_cached { Artist.association_filter(:albums, at_least: 2) }
+        assert_cached { Artist.association_filter(:albums, exactly:  2) }
+        assert_cached { Artist.association_filter(:albums, at_most:  2) }
+
+        assert_cached { Artist.association_filter(:albums, at_least: 2, &:even_id) }
+        assert_cached { Artist.association_filter(:albums, exactly:  2, &:even_id) }
+        assert_cached { Artist.association_filter(:albums, at_most:  2, &:even_id) }
+      end
+
+      it "should not cache potentially dynamic datasets" do
+        refute_cached { Artist.association_filter(:albums){|a| a.where(artist_id: 2)} }
+      end
+    end
   end
 end

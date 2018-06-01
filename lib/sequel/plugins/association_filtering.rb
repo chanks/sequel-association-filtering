@@ -30,9 +30,10 @@ module Sequel
         )
           case [at_least, at_most, exactly].compact.length
           when 0
-            filtering_by_count = false
+            having = nil
           when 1
-            filtering_by_count = true
+            having = at_least || at_most || exactly
+            raise Error, ":at_least, :at_most, and :exactly must be integers if present" unless having.is_a?(Integer)
           else
             raise Error, "cannot pass more than one of :at_least, :at_most, and :exactly"
           end
@@ -42,16 +43,16 @@ module Sequel
               raise Error, "association #{association_name} not found on model #{model}"
             end
 
-          ds = _association_filter_dataset(reflection, group_by_remote: filtering_by_count)
+          ds = _association_filter_dataset(reflection, group_by_remote: !!having)
           ds = yield(ds) if block_given?
 
-          if filtering_by_count
+          if having
             ds =
               ds.having(
                 case
-                when at_least then COUNT_STAR >= at_least
-                when at_most  then COUNT_STAR <= at_most
-                when exactly  then COUNT_STAR =~ exactly
+                when at_least then COUNT_STAR >= having
+                when at_most  then COUNT_STAR <= having
+                when exactly  then COUNT_STAR =~ having
                 else raise Error, ""
                 end
               )
