@@ -72,7 +72,7 @@ class BasicSpec < AssociationFilteringSpecs
           Artist.association_filter(:widgets, a => Object.new)
         end
 
-      assert_equal ":at_least, :at_most, and :exactly must be integers if present", error.message
+      assert_equal ":#{a} must be an Integer if present", error.message
     end
 
     describe "cached datasets" do

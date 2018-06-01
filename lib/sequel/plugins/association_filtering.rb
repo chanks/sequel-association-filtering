@@ -24,16 +24,17 @@ module Sequel
         def association_filter(
           association_name,
           invert: false,
-          at_least: nil,
-          at_most: nil,
-          exactly: nil
+          **extra
         )
-          case [at_least, at_most, exactly].compact.length
+          having_args = extra.slice(:at_least, :at_most, :exactly)
+
+          case having_args.length
           when 0
-            having = nil
+            # No-op
           when 1
-            having = at_least || at_most || exactly
-            raise Error, ":at_least, :at_most, and :exactly must be integers if present" unless having.is_a?(Integer)
+            having_arg   = having_args.keys[0]
+            having_value = having_args.values[0]
+            raise Error, ":#{having_arg} must be an Integer if present" unless having_value.is_a?(Integer)
           else
             raise Error, "cannot pass more than one of :at_least, :at_most, and :exactly"
           end
@@ -43,17 +44,17 @@ module Sequel
               raise Error, "association #{association_name} not found on model #{model}"
             end
 
-          ds = _association_filter_dataset(reflection, group_by_remote: !!having)
+          ds = _association_filter_dataset(reflection, group_by_remote: !!having_arg)
           ds = yield(ds) if block_given?
 
-          if having
+          if having_arg
             ds =
               ds.having(
-                case
-                when at_least then COUNT_STAR >= having
-                when at_most  then COUNT_STAR <= having
-                when exactly  then COUNT_STAR =~ having
-                else raise Error, ""
+                case having_arg
+                when :at_least then COUNT_STAR >= having_value
+                when :at_most  then COUNT_STAR <= having_value
+                when :exactly  then COUNT_STAR =~ having_value
+                else raise Error, "Unexpected argument: #{having_arg.inspect}"
                 end
               )
           end
