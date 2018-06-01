@@ -15,9 +15,15 @@ class BasicSpec < AssociationFilteringSpecs
       foreign_key :artist_id, :artists
     end
 
+    DB.create_table :tracks do
+      primary_key :id
+      foreign_key :album_id, :albums
+    end
+
     DB.run <<-SQL
       INSERT INTO artists SELECT i FROM generate_series(1, 10) i;
       INSERT INTO albums (artist_id) SELECT (i % 10) + 1 FROM generate_series(1, 100) i;
+      INSERT INTO tracks (album_id) SELECT (i % 100) + 1 FROM generate_series(1, 1000) i;
     SQL
 
     class Artist < Sequel::Model
@@ -26,6 +32,15 @@ class BasicSpec < AssociationFilteringSpecs
 
     class Album < Sequel::Model
       many_to_one :artist, class: 'BasicSpec::Artist'
+      one_to_many :tracks, class: 'BasicSpec::Track'
+
+      dataset_module do
+        subset :even_id, Sequel.lit('id % ? = 0', 2)
+      end
+    end
+
+    class Track < Sequel::Model
+      many_to_one :album, class: 'BasicSpec::Album'
 
       dataset_module do
         subset :even_id, Sequel.lit('id % ? = 0', 2)
@@ -36,11 +51,12 @@ class BasicSpec < AssociationFilteringSpecs
   after do
     BasicSpec.send(:remove_const, :Artist)
     BasicSpec.send(:remove_const, :Album)
+    BasicSpec.send(:remove_const, :Track)
     drop_tables
   end
 
   def drop_tables
-    DB.drop_table? :albums, :artists
+    DB.drop_table? :tracks, :albums, :artists, cascade: true
   end
 
   describe "association_filter" do
@@ -109,6 +125,23 @@ class BasicSpec < AssociationFilteringSpecs
 
       it "should not cache potentially dynamic datasets" do
         refute_cached { Artist.association_filter(:albums){|a| a.where(artist_id: 2)} }
+      end
+
+      it "should not error when using the same model from multiple associations" do
+        ds1 = Artist.association_filter(:albums){|a| a.association_filter(:tracks)}
+        ds2 = Album.association_filter(:tracks)
+
+        refute_equal ds1.object_id, ds2.object_id
+
+        ds1 = Artist.association_filter(:albums){|a| a.association_filter(:tracks, &:even_id)}
+        ds2 = Album.association_filter(:tracks, &:even_id)
+
+        refute_equal ds1.object_id, ds2.object_id
+
+        ds1 = Artist.association_filter(:albums)
+        ds2 = Track.association_filter(:album)
+
+        refute_equal ds1.object_id, ds2.object_id
       end
     end
   end
